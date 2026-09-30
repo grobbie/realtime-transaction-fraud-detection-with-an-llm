@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: system-one-scorer-lb
+  namespace: modelserving
+  annotations:
+    metallb.universe.tf/allow-shared-ip: "system-one-scorer-key"
+spec:
+  type: LoadBalancer
+  selector:
+    serving.kserve.io/inferenceservice: system-one-scorer-cpu
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

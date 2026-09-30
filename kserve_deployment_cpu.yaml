@@ -1,0 +1,59 @@
+apiVersion: "serving.kserve.io/v1beta1"
+kind: "InferenceService"
+metadata:
+  name: "system-one-scorer-cpu"
+  namespace: "modelserving"
+  annotations:
+    serving.kserve.io/deploymentMode: "RawDeployment"                          # Standard Kubernetes Deployment using hostPath
+spec:
+  predictor:
+    minReplicas: 1
+    containers:
+      - name: "kserve-container"
+        image: "vllm/vllm-openai-cpu:latest"
+        command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+        args:
+          - "--model=/model"                                                   # Local model directory mounted via hostPath
+          - "--quantization=compressed-tensors"                                # 4-bit quantized weights
+          - "--trust-remote-code"
+          - "--port=8080"
+          - "--enforce-eager"
+          - "--max-model-len=1024"
+          - "--max-num-seqs=16"
+          - "--gpu-memory-utilization=0.3"
+          - "--dtype=bfloat16"
+        env:
+          - name: "VLLM_TARGET_DEVICE"
+            value: "cpu"
+          - name: "VLLM_CPU_KVCACHE_SPACE"
+            value: "1"                                                         # Restrict CPU KV cache to 1 GiB
+          - name: "VLLM_WORKER_MULTIPROC_METHOD"
+            value: "spawn"
+          - name: "OMP_NUM_THREADS"
+            value: "8"                                                         # OpenMP parallel threads optimization
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        volumeMounts:
+          - mountPath: /model                                                 # Mount point inside container
+            name: model-volume
+            readOnly: true
+          - mountPath: /dev/shm
+            name: dshm
+        resources:
+          limits:
+            cpu: "8"
+            memory: "24Gi"
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+    volumes:
+      - name: model-volume                                                    # Standard Kubernetes hostPath volume
+        hostPath:
+          path: /home/rob/Documents/antigrav/system-one-4bit-awq
+          type: DirectoryOrCreate
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 4Gi
+
